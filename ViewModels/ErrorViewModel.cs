@@ -1,6 +1,4 @@
-using System;
-
-namespace KindergartenManagementSystem.Models
+namespace KindergartenManagementSystem.ViewModels
 {
     public class ErrorViewModel
     {

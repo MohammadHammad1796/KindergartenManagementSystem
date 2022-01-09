@@ -1,17 +1,17 @@
-using KindergartenManagementSystem.Data;
+using KindergartenManagementSystem.Core.Helpers;
+using KindergartenManagementSystem.Core.Services;
+using KindergartenManagementSystem.Extensions;
+using KindergartenManagementSystem.Infrastructure.Data;
+using KindergartenManagementSystem.Infrastructure.Services;
+using KindergartenManagementSystem.Infrastructure.Services.Background;
+using KindergartenManagementSystem.Mapping;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace KindergartenManagementSystem
 {
@@ -27,14 +27,41 @@ namespace KindergartenManagementSystem
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(
-                    Configuration.GetConnectionString("DefaultConnection")));
-            services.AddDatabaseDeveloperPageExceptionFilter();
+            services.AddMvc().AddNewtonsoftJson();
 
-            services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
-                .AddEntityFrameworkStores<ApplicationDbContext>();
-            services.AddControllersWithViews();
+            services.AddAutoMapper(typeof(Startup));
+            services.AddScoped<IMapper, ApplicationMapper>();
+
+            services.AddScoped<IUserStore<InfrastructureUser>, InfrastructureUserStore>();
+            services.AddScoped<IUserManager, UserManager>();
+            services.AddScoped<ISignInManager, SignInManager>();
+
+            services.Configure<EmailSettings>(Configuration.GetSection("EmailSettings"));
+            services.AddSingleton<IEmailService, EmailService>();
+
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+            services.AddDbContext<InfrastructureDbContext>(options =>
+                options.UseSqlServer(
+                    Configuration.GetConnectionString("KindergartenCS")));
+
+            services.AddIdentity<InfrastructureUser, InfrastructureRole>(options =>
+                {
+                    options.SignIn.RequireConfirmedAccount = true;
+                    options.SignIn.RequireConfirmedEmail = true;
+                    options.SignIn.RequireConfirmedPhoneNumber = false;
+                    options.Tokens.EmailConfirmationTokenProvider = TokenOptions.DefaultEmailProvider;
+                    options.Tokens.ChangeEmailTokenProvider = TokenOptions.DefaultEmailProvider;
+                    options.Tokens.PasswordResetTokenProvider = TokenOptions.DefaultEmailProvider;
+                })
+                .AddRoles<InfrastructureRole>()
+                .AddEntityFrameworkStores<InfrastructureDbContext>()
+                .AddDefaultTokenProviders();
+
+            services.ApplyConfigurationToExtensions();
+            services.AddJwtAuthentication();
+
+            services.AddHostedService<ScheduleRemoveExpiredJwt>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -43,7 +70,6 @@ namespace KindergartenManagementSystem
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
-                app.UseMigrationsEndPoint();
             }
             else
             {
